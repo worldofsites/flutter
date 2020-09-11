@@ -2,8 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// @dart = 2.8
-
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -14,9 +12,7 @@ import 'debug.dart';
 import 'framework.dart';
 
 const double _kOffset = 40.0; // distance to bottom of banner, at a 45 degree angle inwards
-const double _kHeight = 12.0; // height of banner
-const double _kBottomOffset = _kOffset + 0.707 * _kHeight; // offset plus sqrt(2)/2 * banner height
-const Rect _kRect = Rect.fromLTWH(-_kOffset, _kOffset - _kHeight, _kOffset * 2.0, _kHeight);
+const double _kHeight = 12.0; // default height of banner
 
 const Color _kColor = Color(0xA0B71C1C);
 const TextStyle _kTextStyle = TextStyle(
@@ -61,18 +57,20 @@ class BannerPainter extends CustomPainter {
   /// The [message], [textDirection], [location], and [layoutDirection]
   /// arguments must not be null.
   BannerPainter({
-    @required this.message,
-    @required this.textDirection,
-    @required this.location,
-    @required this.layoutDirection,
+    required this.message,
+    required this.textDirection,
+    required this.location,
+    required this.layoutDirection,
+    this.height = _kHeight,
     this.color = _kColor,
     this.textStyle = _kTextStyle,
   }) : assert(message != null),
        assert(textDirection != null),
        assert(location != null),
+       assert(height != null),
        assert(color != null),
        assert(textStyle != null),
-       super(repaint: PaintingBinding.instance.systemFonts);
+       super(repaint: PaintingBinding.instance!.systemFonts);
 
   /// The message to show in the banner.
   final String message;
@@ -104,6 +102,11 @@ class BannerPainter extends CustomPainter {
   ///  * [textDirection], which controls the reading direction of the [message].
   final TextDirection layoutDirection;
 
+  /// Height of banner.
+  ///
+  /// Defaults to 12.0.
+  final double height;
+
   /// The color to paint behind the [message].
   ///
   /// Defaults to a dark red.
@@ -120,11 +123,16 @@ class BannerPainter extends CustomPainter {
   );
 
   bool _prepared = false;
-  TextPainter _textPainter;
-  Paint _paintShadow;
-  Paint _paintBanner;
+  late TextPainter _textPainter;
+  late Paint _paintShadow;
+  late Paint _paintBanner;
+  late double _bottomOffset;
+  late Rect _rect;
 
   void _prepare() {
+    _bottomOffset = _kOffset + 0.707 * height; // offset plus sqrt(2)/2 * banner height
+    _rect = Rect.fromLTWH(-_kOffset, _kOffset - height, _kOffset * 2.0, height);
+
     _paintShadow = _shadow.toPaint();
     _paintBanner = Paint()
       ..color = color;
@@ -143,11 +151,11 @@ class BannerPainter extends CustomPainter {
     canvas
       ..translate(_translationX(size.width), _translationY(size.height))
       ..rotate(_rotation)
-      ..drawRect(_kRect, _paintShadow)
-      ..drawRect(_kRect, _paintBanner);
+      ..drawRect(_rect, _paintShadow)
+      ..drawRect(_rect, _paintBanner);
     const double width = _kOffset * 2.0;
     _textPainter.layout(minWidth: width, maxWidth: width);
-    _textPainter.paint(canvas, _kRect.topLeft + Offset(0.0, (_kRect.height - _textPainter.height) / 2.0));
+    _textPainter.paint(canvas, _rect.topLeft + Offset(0.0, (_rect.height - _textPainter.height) / 2.0));
   }
 
   @override
@@ -155,6 +163,7 @@ class BannerPainter extends CustomPainter {
     return message != oldDelegate.message
         || location != oldDelegate.location
         || color != oldDelegate.color
+        || height != oldDelegate.height
         || textStyle != oldDelegate.textStyle;
   }
 
@@ -168,29 +177,26 @@ class BannerPainter extends CustomPainter {
       case TextDirection.rtl:
         switch (location) {
           case BannerLocation.bottomEnd:
-            return _kBottomOffset;
+            return _bottomOffset;
           case BannerLocation.topEnd:
             return 0.0;
           case BannerLocation.bottomStart:
-            return width - _kBottomOffset;
+            return width - _bottomOffset;
           case BannerLocation.topStart:
             return width;
         }
-        break;
       case TextDirection.ltr:
         switch (location) {
           case BannerLocation.bottomEnd:
-            return width - _kBottomOffset;
+            return width - _bottomOffset;
           case BannerLocation.topEnd:
             return width;
           case BannerLocation.bottomStart:
-            return _kBottomOffset;
+            return _bottomOffset;
           case BannerLocation.topStart:
             return 0.0;
         }
-        break;
     }
-    return null;
   }
 
   double _translationY(double height) {
@@ -198,12 +204,11 @@ class BannerPainter extends CustomPainter {
     switch (location) {
       case BannerLocation.bottomStart:
       case BannerLocation.bottomEnd:
-        return height - _kBottomOffset;
+        return height - _bottomOffset;
       case BannerLocation.topStart:
       case BannerLocation.topEnd:
         return 0.0;
     }
-    return null;
   }
 
   double get _rotation {
@@ -219,7 +224,6 @@ class BannerPainter extends CustomPainter {
           case BannerLocation.topStart:
             return math.pi / 4.0;
         }
-        break;
       case TextDirection.ltr:
         switch (location) {
           case BannerLocation.bottomStart:
@@ -229,9 +233,7 @@ class BannerPainter extends CustomPainter {
           case BannerLocation.topStart:
             return -math.pi / 4.0;
         }
-        break;
     }
-    return null;
   }
 }
 
@@ -249,16 +251,18 @@ class Banner extends StatelessWidget {
   ///
   /// The [message] and [location] arguments must not be null.
   const Banner({
-    Key key,
+    Key? key,
     this.child,
-    @required this.message,
+    required this.message,
     this.textDirection,
-    @required this.location,
+    required this.location,
     this.layoutDirection,
+    this.height = _kHeight,
     this.color = _kColor,
     this.textStyle = _kTextStyle,
   }) : assert(message != null),
        assert(location != null),
+       assert(height != null),
        assert(color != null),
        assert(textStyle != null),
        super(key: key);
@@ -266,7 +270,7 @@ class Banner extends StatelessWidget {
   /// The widget to show behind the banner.
   ///
   /// {@macro flutter.widgets.child}
-  final Widget child;
+  final Widget? child;
 
   /// The message to show in the banner.
   final String message;
@@ -285,7 +289,7 @@ class Banner extends StatelessWidget {
   /// See also:
   ///
   ///  * [layoutDirection], which controls the interpretation of the [location].
-  final TextDirection textDirection;
+  final TextDirection? textDirection;
 
   /// Where to show the banner (e.g., the upper right corner).
   final BannerLocation location;
@@ -299,7 +303,10 @@ class Banner extends StatelessWidget {
   /// See also:
   ///
   ///  * [textDirection], which controls the reading direction of the [message].
-  final TextDirection layoutDirection;
+  final TextDirection? layoutDirection;
+
+  /// Height of banner.
+  final double height;
 
   /// The color of the banner.
   final Color color;
@@ -313,9 +320,10 @@ class Banner extends StatelessWidget {
     return CustomPaint(
       foregroundPainter: BannerPainter(
         message: message,
-        textDirection: textDirection ?? Directionality.of(context),
+        textDirection: textDirection ?? Directionality.of(context)!,
         location: location,
-        layoutDirection: layoutDirection ?? Directionality.of(context),
+        layoutDirection: layoutDirection ?? Directionality.of(context)!,
+        height: height,
         color: color,
         textStyle: textStyle,
       ),
@@ -330,8 +338,9 @@ class Banner extends StatelessWidget {
     properties.add(EnumProperty<TextDirection>('textDirection', textDirection, defaultValue: null));
     properties.add(EnumProperty<BannerLocation>('location', location));
     properties.add(EnumProperty<TextDirection>('layoutDirection', layoutDirection, defaultValue: null));
+    properties.add(DoubleProperty('height', height, showName: false));
     properties.add(ColorProperty('color', color, showName: false));
-    textStyle?.debugFillProperties(properties, prefix: 'text ');
+    textStyle.debugFillProperties(properties, prefix: 'text ');
   }
 }
 
@@ -341,8 +350,8 @@ class Banner extends StatelessWidget {
 class CheckedModeBanner extends StatelessWidget {
   /// Creates a const checked mode banner.
   const CheckedModeBanner({
-    Key key,
-    @required this.child,
+    Key? key,
+    required this.child,
   }) : super(key: key);
 
   /// The widget to show behind the banner.
